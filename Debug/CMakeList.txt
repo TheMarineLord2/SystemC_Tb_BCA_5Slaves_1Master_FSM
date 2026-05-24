@@ -1,0 +1,24 @@
+cmake_minimum_required(VERSION 3.20)
+project(SystemC_Project CXX)
+
+# Standard required for SystemC
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# The ONLY variable you need to configure/change
+set(SYSTEMC_HOME "/usr/local/systemc-3.0.2")
+
+# 1. Header files location
+include_directories(${SYSTEMC_HOME}/include)
+
+# 2. Library files location (for compiling)
+link_directories(${SYSTEMC_HOME}/lib-linux64)
+
+# 3. OPTION B: Tells the loader exactly where to find the .so files at RUNTIME
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath,${SYSTEMC_HOME}/lib-linux64")
+
+# Create the executable from your source file
+add_executable(SystemC_Project main.cpp)
+
+# 4. Link the libraries
+target_link_libraries(SystemC_Project systemc m)
