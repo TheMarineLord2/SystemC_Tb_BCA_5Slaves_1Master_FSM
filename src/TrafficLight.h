@@ -1,17 +1,24 @@
 /*
  * TrafficLight.h
  *
- *  Created on: May 21, 2026
+ *  Created on: May 25, 2026
  *      Author: soph
  */
 
 #ifndef TRAFFICLIGHT_H_
 #define TRAFFICLIGHT_H_
 
-class TrafficLight {
+#include <systemc>
+#include <systemc.h>
+#include <iostream>
+
+class TrafficLight : public sc_module {
 public:
-	TrafficLight();
-	virtual ~TrafficLight();
+	sc_inout<int> order;
+
+	SC_CTOR(TrafficLight);
+
+	void impulse();
 };
 
 #endif /* TRAFFICLIGHT_H_ */
