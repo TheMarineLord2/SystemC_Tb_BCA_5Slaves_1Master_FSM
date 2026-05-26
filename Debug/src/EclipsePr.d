@@ -130,7 +130,10 @@ src/EclipsePr.o: ../src/EclipsePr.cpp \
  /home/soph/systemc-3.0.2/include/sysc/utils/sc_pvector.h \
  /home/soph/systemc-3.0.2/include/sysc/utils/sc_string_view.h \
  /home/soph/systemc-3.0.2/include/sysc/utils/sc_vector.h \
- /home/soph/systemc-3.0.2/include/sysc/utils/sc_string.h
+ /home/soph/systemc-3.0.2/include/sysc/utils/sc_string.h \
+ /home/soph/systemc-3.0.2/include/systemc.h \
+ /home/soph/systemc-3.0.2/include/systemc ../src/Trafficlightcontroller.h \
+ ../src/TrafficLight.h
 /home/soph/systemc-3.0.2/include/systemc:
 /home/soph/systemc-3.0.2/include/sysc/kernel/sc_cmnhdr.h:
 /home/soph/systemc-3.0.2/include/sysc/kernel/sc_dynamic_processes.h:
@@ -263,3 +266,7 @@ src/EclipsePr.o: ../src/EclipsePr.cpp \
 /home/soph/systemc-3.0.2/include/sysc/utils/sc_string_view.h:
 /home/soph/systemc-3.0.2/include/sysc/utils/sc_vector.h:
 /home/soph/systemc-3.0.2/include/sysc/utils/sc_string.h:
+/home/soph/systemc-3.0.2/include/systemc.h:
+/home/soph/systemc-3.0.2/include/systemc:
+../src/Trafficlightcontroller.h:
+../src/TrafficLight.h:

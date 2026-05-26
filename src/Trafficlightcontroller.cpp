@@ -1,4 +1,4 @@
-/*
+*
  * Trafficlightcontroller.cpp
  *
  *  Created on: May 25, 2026
@@ -6,6 +6,3 @@
  */
 
 #include "Trafficlightcontroller.h"
-
-TLController::SC_CTOR(TLController)
-
