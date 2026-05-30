@@ -1,227 +1,286 @@
 #include <systemc>
-#include <systemc.h>
 #include <iostream>
-#include "Trafficlightcontroller.h"
+#include <string>
 
 using namespace sc_core;
 
 // ============================================================
-//  Testbench – covers all slider combinations including
-//  illegal transitions (error detection).
+// State Machine & Helpers
 // ============================================================
-SC_MODULE(Testbench)
-{
-    sc_out<bool> clk;
-    sc_out<bool> sw_blink;
-    sc_out<bool> sw_emergency;
-    sc_out<bool> sw_next;
-    sc_out<bool> sw_priorInParr;
-    sc_out<bool> sw_priorInLine;
-
-
-    SC_CTOR(Testbench) {
-        SC_THREAD(stimulus);
-    }
-
-    void stimulus() {
-        // Initial state
-        sw_blink.write(false);
-        sw_emergency.write(false);
-        sw_next.write(false);
-        clk.write(false);
-        wait(5, SC_NS);
-
-        auto tick = [&]() {
-            clk.write(true);  wait(5, SC_NS);
-            clk.write(false); wait(5, SC_NS);
-        };
-
-        auto pulse_next = [&]() {
-            sw_next.write(true);  tick();
-            sw_next.write(false); tick();
-        };
-
-        std::cout << "\n=== TEST 1: Normal FSM cycle RED->R+O->GREEN->ORANGE->RED ===" << std::endl;
-        tick();           // idle
-        pulse_next();     // RED -> RED_ORANGE
-        pulse_next();     // RED_ORANGE -> GREEN
-        pulse_next();     // GREEN -> ORANGE
-        pulse_next();     // ORANGE -> RED
-        tick();
-
-        std::cout << "\n=== TEST 2: Enter BLINKING_ORANGE mode ===" << std::endl;
-        sw_blink.write(true);  tick();
-        tick();
-        tick();   // observe 3 blink phases
-        sw_blink.write(false); tick();   // return to RED
-
-        std::cout << "\n=== TEST 3: Advance to GREEN then enter EMERGENCY ===" << std::endl;
-        pulse_next();     // RED -> RED_ORANGE
-        pulse_next();     // RED_ORANGE -> GREEN
-        sw_emergency.write(true);  tick();
-        tick();
-        sw_emergency.write(false); tick();   // return to RED
-
-        std::cout << "\n=== TEST 4: Illegal – press sw_next while in BLINKING_ORANGE (should -> ERROR) ===" << std::endl;
-        sw_blink.write(true);  tick();
-        pulse_next();           // ILLEGAL → ERROR
-        tick();
-
-        std::cout << "\n=== TEST 5: Verify ERROR is a trap state ===" << std::endl;
-        pulse_next();    // still ERROR
-        sw_blink.write(false); tick();  // still ERROR
-        sw_emergency.write(true); tick();
-        sw_emergency.write(false); tick();
-
-        std::cout << "\n=== Simulation complete ===" << std::endl;
-        sc_stop();
-    }
+enum LightState {
+    STATE_RED           = 1,
+    STATE_RED_YELLOW    = 4,
+    STATE_GREEN         = 2,
+    STATE_YELLOW        = 3,
+    STATE_BLINKING      = 5,
+    STATE_ERROR         = 6,
+    STATE_OFF           = 7
 };
 
-int sc_main(int argc, char* argv[])
-{
-    // Signals sent by TF controller
-    sc_signal<bool> clk;
-    sc_signal<bool> sw_blink;
-    sc_signal<bool> sw_emergency;
-    sc_signal<bool> sw_next;
-    sc_signal<bool> sw_priorInParr;
-    sc_signal<bool> sw_priorInLine;
-
-    sc_signal<bool> ledA_red, ledA_orange, ledA_green, ledA_blink, ledA_err;
-    sc_signal<bool> ledB_red, ledB_orange, ledB_green, ledB_blink, ledB_err;
-
-    /*// Instantiate DUT
-    TrafficLightController dut("TrafficLightController");
-    dut.clk(clk);
-    dut.sw_blink(sw_blink);
-    dut.sw_emergency(sw_emergency);
-    dut.sw_next(sw_next);
-    dut.ledA_red(ledA_red);
-    dut.ledA_orange(ledA_orange);
-    dut.ledA_green(ledA_green);
-    dut.ledA_blink_orange(ledA_blink);
-    dut.ledA_error(ledA_err);
-    dut.ledB_red(ledB_red);
-    dut.ledB_orange(ledB_orange);
-    dut.ledB_green(ledB_green);
-    dut.ledB_blink_orange(ledB_blink);
-    dut.ledB_error(ledB_err); */
-
-    // Instantiate testbench
-    Testbench tb("Testbench");
-    tb.clk(clk);
-    tb.sw_blink(sw_blink);
-    tb.sw_emergency(sw_emergency);
-    tb.sw_next(sw_next);
-
-    TLController brain;
-
-    /* VVCD trace
-    sc_trace_file* tf = sc_create_vcd_trace_file("traffic_light_trace");
-    sc_trace(tf, clk,          "clk");
-    sc_trace(tf, sw_next,      "sw_next");
-    sc_trace(tf, sw_blink,     "sw_blink");
-    sc_trace(tf, sw_emergency, "sw_emergency");
-    sc_trace(tf, ledA_red,     "A_red");
-    sc_trace(tf, ledA_orange,  "A_orange");
-    sc_trace(tf, ledA_green,   "A_green");
-    sc_trace(tf, ledA_blink,   "A_blink_orange");
-    sc_trace(tf, ledA_err,     "A_error");
-    sc_trace(tf, ledB_red,     "B_red");
-    sc_trace(tf, ledB_orange,  "B_orange");
-    sc_trace(tf, ledB_green,   "B_green");
-    sc_trace(tf, ledB_blink,   "B_blink_orange");
-    sc_trace(tf, ledB_err,     "B_error");
-	*/
-
-    sc_start();
-
-    // sc_close_vcd_trace_file(tf);
-    return 0;
+int nextState(int current) {
+    switch(current) {
+        case STATE_RED:        return STATE_RED_YELLOW;
+        case STATE_RED_YELLOW: return STATE_GREEN;
+        case STATE_GREEN:      return STATE_YELLOW;
+        case STATE_YELLOW:     return STATE_RED;
+        case STATE_BLINKING:   return STATE_BLINKING;
+        case STATE_ERROR:      return STATE_ERROR;
+        case STATE_OFF:        return STATE_OFF;
+        default:               return STATE_RED;
+    }
 }
 
+void displayLight(int state, int controller_id) {
+    std::string v, h;
+    switch(state) {
+        case STATE_RED:        v = "R";   h = "G";   break;
+        case STATE_RED_YELLOW: v = "R+O"; h = "Y";   break;
+        case STATE_GREEN:      v = "G";   h = "R";   break;
+        case STATE_YELLOW:     v = "Y";   h = "R+O"; break;
+        case STATE_BLINKING:   v = "B";   h = "B";   break;
+        case STATE_ERROR:      v = "E";   h = "E";   break;
+        case STATE_OFF:        v = "_";   h = "_";   break;
+        default:               v = "?";   h = "?";
+    }
+    std::cout << "  [ID: " << controller_id << "][" << v << "][" << h << "] \n";
+}
 
+// ============================================================
+// Slave: Traffic Light Controller (BCA Synchronized)
+// ============================================================
+SC_MODULE(TrafficLightController) {
+    sc_in<bool> clk;
 
+    // Interfejs magistrali (Slave)
+    sc_in<int>  bus_cmd;
+    sc_in<bool> bus_req;
+    sc_out<bool> bus_ack;
 
-/*
-struct Master : sc_module {
-    sc_inout<int> bus_port; // Port dwukierunkowy
+    int controller_id;
+    int stateCurr;
+    int statePrev;
 
-    SC_CTOR(Master) {
-        SC_THREAD(process); // SC_THREAD wymagany do użycia funkcji wait()
+    SC_HAS_PROCESS(TrafficLightController);
+
+    TrafficLightController(sc_module_name name, int id)
+        : sc_module(name), controller_id(id), stateCurr(STATE_RED), statePrev(STATE_RED) {
+        SC_METHOD(clockHandler);
+        sensitive << clk.pos(); // Reakcja wyłącznie na zbocze narastające
+        dont_initialize();
     }
 
-    void process() {
-        int user_input;
+    void clockHandler() {
+        // Obsługa protokołu magistrali (Handshake)
+        if (bus_req.read() == true && bus_ack.read() == false) {
+            int cmd = bus_cmd.read();
 
-        while (true) {
-            std::cout << "\n@" << sc_time_stamp()
-                      << " [Master] Podaj liczbe do wyslania na magistrale (lub -1 aby zakonczyc): ";
-
-            // Pobieranie danych z klawiatury.
-            // UWAGA: Czas symulacji "stoi w miejscu" dopóki użytkownik nie wciśnie Enter.
-            std::cin >> user_input;
-
-            // Warunek wyjścia z pętli i zakończenia symulacji
-            if (user_input == -1) {
-                std::cout << "@" << sc_time_stamp() << " [Master] Zamykanie systemu..." << std::endl;
-                sc_stop(); // Zatrzymuje jądro symulacyjne SystemC
-                break;
+            switch(cmd) {
+                case 0: stateCurr = STATE_OFF; break;
+                case 1: stateCurr = STATE_ERROR; break;
+                case 2: stateCurr = statePrev; break;
+                case 3: stateCurr = STATE_RED; break;
+                case 4:
+                    if(stateCurr == STATE_BLINKING || stateCurr == STATE_ERROR) {
+                        stateCurr = STATE_ERROR;
+                    } else {
+                        stateCurr = nextState(stateCurr);
+                    }
+                    break;
+                case 5: stateCurr = STATE_GREEN; break;
+                default: stateCurr = STATE_RED;
             }
 
-            // 1. Zapis na magistralę
-            bus_port.write(user_input);
-            std::cout << "@" << sc_time_stamp() << " [Master] Zapisano dane: " << user_input << std::endl;
+            statePrev = stateCurr;
+            displayLight(stateCurr, controller_id);
 
-            // Czekamy 1 sekundę symulacyjną na propagację danych
-            wait(1, SC_SEC);
-
-            // 2. Odczyt z magistrali (potwierdzenie własnego zapisu)
-            std::cout << "@" << sc_time_stamp() << " [Master] Odczytano wlasne dane: " << bus_port.read() << std::endl;
-
-            // Czekamy kolejne 2 sekundy symulacyjne przed kolejnym zapytaniem
-            wait(2, SC_SEC);
+            bus_ack.write(true); // Potwierdzenie odebrania danych w tym cyklu
+        }
+        else if (bus_req.read() == false) {
+            bus_ack.write(false); // Reset potwierdzenia, gdy master zwolni żądanie
         }
     }
 };
 
-struct Slave : sc_module {
-    sc_in<int> bus_port;
-    int slave_id;
+// ============================================================
+// Bus Module: BCA Broadcast Bus
+// Zapewnia cykliczną dystrybucję danych do wszystkich kontrolerów
+// ============================================================
+SC_MODULE(BcaBus) {
+    sc_in<bool> clk;
 
-    SC_HAS_PROCESS(Slave);
-    Slave(sc_module_name name, int id) : sc_module(name), slave_id(id) {
-        SC_METHOD(read_data);
-        sensitive << bus_port; // Metoda uruchomi się ZAWSZE, gdy zmieni się wartość na porcie
-        dont_initialize();     // Nie uruchamiaj metody w zerowej sekundzie (przed pierwszym zapisem)
+    // Porty Mastera
+    sc_in<bool>  m_req;
+    sc_in<int>   m_cmd;
+    sc_out<bool> m_ack;
+
+    // Porty Slave'ów (rozesłanie do 5 urządzeń)
+    sc_out<bool> s_req;
+    sc_out<int>  s_cmd;
+    sc_in<bool>  s_ack[5];
+
+    SC_CTOR(BcaBus) {
+        SC_METHOD(bus_logic);
+        sensitive << clk.pos();
+        dont_initialize();
     }
 
-    void read_data() {
-        std::cout << "@" << sc_time_stamp() << " [Slave " << slave_id << "] Odczytano dane: " << bus_port.read() << std::endl;
+    void bus_logic() {
+        if (m_req.read() == true) {
+            // Przekaż żądanie i dane do wszystkich urządzeń podrzędnych
+            s_cmd.write(m_cmd.read());
+            s_req.write(true);
+
+            // Arbitraż powrotny - sprawdź, czy WSZYSTKIE kontrolery odpowiedziały
+            bool all_ack = true;
+            for (int i = 0; i < 5; i++) {
+                if (s_ack[i].read() == false) {
+                    all_ack = false;
+                }
+            }
+            m_ack.write(all_ack); // Wyślij ACK do Mastera dopiero, gdy wszystkie slave'y potwierdzą
+        } else {
+            // Zwolnienie magistrali
+            s_req.write(false);
+            m_ack.write(false);
+        }
     }
 };
 
-int sc_main(int, char*[]) {
-    // Współdzielony element reprezentujący magistralę danych
-    sc_signal<int> shared_data_bus;
+// ============================================================
+// Master: System Controller ("Tone Setter")
+// ============================================================
+SC_MODULE(SystemController) {
+    sc_in<bool> clk;
 
-    // Instancjacja modułu zapisująco-odczytującego
-    Master master_node("master_node");
-    master_node.bus_port(shared_data_bus); // Podłączenie do magistrali
+    // Interfejs do magistrali BCA
+    sc_out<bool> bus_req;
+    sc_out<int>  bus_cmd;
+    sc_in<bool>  bus_ack;
 
-    // Instancjacja dwóch modułów tylko-czytających
-    Slave slave_node1("slave_node1", 1);
-    slave_node1.bus_port(shared_data_bus); // Podłączenie do tej samej magistrali
+    SC_CTOR(SystemController) {
+        SC_THREAD(control);
+        sensitive << clk.pos();
+    }
 
-    Slave slave_node2("slave_node2", 2);
-    slave_node2.bus_port(shared_data_bus); // Podłączenie do tej samej magistrali
+    // Funkcja blokująca, symulująca transakcję cykl po cyklu
+    void send_cmd(int cmd) {
+        bus_cmd.write(cmd);
+        bus_req.write(true); // Faza 1: Wystawienie żądania i danych na magistralę
 
-    std::cout << "Rozpoczynam symulacje..." << std::endl;
+        do { wait(); } while (bus_ack.read() == false); // Faza 2: Czekanie na sprzętowe potwierdzenie z magistrali
 
-    // Uruchomienie jądra symulacyjnego SystemC na określoną ilość czasu (np. 100 ns)
-    sc_start(100, SC_SEC);
+        bus_req.write(false); // Faza 3: Zakończenie transakcji
 
-    std::cout << "Koniec symulacji." << std::endl;
+        do { wait(); } while (bus_ack.read() == true); // Faza 4: Czekanie na całkowite zwolnienie linii przez Slave'y
+    }
+
+    void control() {
+        // Inicjalizacja stanu zerowego magistrali
+        bus_req.write(false);
+        bus_cmd.write(3);
+        wait(2); // Czekamy 2 cykle na stabilizację
+
+        std::cout << "=== START: Wymuszenie stanu RED na magistrali ===" << std::endl;
+        send_cmd(3); // Start RED
+
+        std::cout << "\n=== TEST 1: Normal FSM cycle on all controllers ===" << std::endl;
+        send_cmd(4);
+        wait(2); // opóźnienie miedzy transakcjami reprezentowane w cyklach
+
+        std::cout << "\n=== TEST 2: Blink all controllers ===" << std::endl;
+        send_cmd(5); // Przejdź najpierw w GREEN
+        wait(1);
+        // Uwaga: w logice FSM brak bezpośredniego wejścia w BLINK z dowolnego stanu poleceniem.
+        // Jeśli komenda 4 na ERROR/BLINK robi trap, możemy tu wymusić ERROR
+        send_cmd(1);
+        wait(2);
+
+        std::cout << "\n=== TEST 3: Emergency override (VEHIC_X) ===" << std::endl;
+        send_cmd(3);
+        wait(2);
+
+        std::cout << "\n=== TEST 4: Cykl FSM ===" << std::endl;
+        send_cmd(4);
+        wait(1);
+        send_cmd(4);
+
+        std::cout << "\n>>> SYSTEM CONTROLLER: Relinquishing control\n" << std::endl;
+        sc_stop(); // Zakończenie symulacji w sposób elegancki
+    }
+};
+
+// ============================================================
+// Top-Level: Testbench
+// ============================================================
+SC_MODULE(Testbench) {
+    // Deklaracja sygnałów zegara i wewnętrznych
+    sc_clock clk;
+
+    // Sygnały Master <-> Magistrala
+    sc_signal<bool> m_req;
+    sc_signal<int>  m_cmd;
+    sc_signal<bool> m_ack;
+
+    // Sygnały Magistrala <-> Slaves
+    sc_signal<bool> s_req;
+    sc_signal<int>  s_cmd;
+    sc_signal<bool> s_ack[5];
+
+    // Moduły
+    SystemController* sys_ctrl;
+    BcaBus* bus;
+    TrafficLightController* controller[5];
+
+    SC_CTOR(Testbench) : clk("clk", 10, SC_NS) { // Zegar 10ns
+        // 1. Inicjalizacja Mastera
+        sys_ctrl = new SystemController("SystemController");
+        sys_ctrl->clk(clk);
+        sys_ctrl->bus_req(m_req);
+        sys_ctrl->bus_cmd(m_cmd);
+        sys_ctrl->bus_ack(m_ack);
+
+        // 2. Inicjalizacja Magistrali BCA
+        bus = new BcaBus("BCABroadcastBus");
+        bus->clk(clk);
+        bus->m_req(m_req);
+        bus->m_cmd(m_cmd);
+        bus->m_ack(m_ack);
+        bus->s_req(s_req);
+        bus->s_cmd(s_cmd);
+
+        // 3. Inicjalizacja Slave'ów (Sygnalizacji) i podpinanie ich do magistrali
+        for(int i = 0; i < 5; i++) {
+            std::string ctrl_name = "Controller_" + std::to_string(i);
+            controller[i] = new TrafficLightController(ctrl_name.c_str(), i);
+            controller[i]->clk(clk);
+            controller[i]->bus_req(s_req);
+            controller[i]->bus_cmd(s_cmd);
+            controller[i]->bus_ack(s_ack[i]); // Każdy ma swój kanał ACK
+
+            // Rejestracja w magistrali
+            bus->s_ack[i](s_ack[i]);
+        }
+    }
+
+    ~Testbench() {
+        delete sys_ctrl;
+        delete bus;
+        for(int i = 0; i < 5; i++) delete controller[i];
+    }
+};
+
+// ============================================================
+// Main Simulation
+// ============================================================
+int sc_main(int argc, char* argv[]) {
+    std::cout << "\n" << std::string(80, '=') << std::endl;
+    std::cout << "ECLIPSE PROJECT: Traffic Light System - Bus Cycle Accurate Model" << std::endl;
+    std::cout << "Architecture: SystemController (Master) -> BcaBus -> 5x TrafficLightController (Slaves)" << std::endl;
+    std::cout << std::string(80, '=') << "\n" << std::endl;
+
+    Testbench tb("TopLevelTestbench");
+
+    sc_start(); // Testbench automatycznie przerwie symulację przez sc_stop() w kontrolerze
+
     return 0;
-}*/
+}

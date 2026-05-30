@@ -6,19 +6,16 @@
 CPP_SRCS += \
 ../src/EclipsePr.cpp \
 ../src/TrafficLight.cpp \
-../src/Trafficlightcontroller.cpp \
 ../src/library.cpp 
 
 CPP_DEPS += \
 ./src/EclipsePr.d \
 ./src/TrafficLight.d \
-./src/Trafficlightcontroller.d \
 ./src/library.d 
 
 OBJS += \
 ./src/EclipsePr.o \
 ./src/TrafficLight.o \
-./src/Trafficlightcontroller.o \
 ./src/library.o 
 
 
@@ -34,7 +31,7 @@ src/%.o: ../src/%.cpp src/subdir.mk
 clean: clean-src
 
 clean-src:
-	-$(RM) ./src/EclipsePr.d ./src/EclipsePr.o ./src/TrafficLight.d ./src/TrafficLight.o ./src/Trafficlightcontroller.d ./src/Trafficlightcontroller.o ./src/library.d ./src/library.o
+	-$(RM) ./src/EclipsePr.d ./src/EclipsePr.o ./src/TrafficLight.d ./src/TrafficLight.o ./src/library.d ./src/library.o
 
 .PHONY: clean-src
 
