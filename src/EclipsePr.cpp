@@ -125,24 +125,29 @@ SC_MODULE(BcaBus) {
     }
 
     void bus_logic() {
-        if (m_req.read() == true) {
-            // Przekaż żądanie i dane do wszystkich urządzeń podrzędnych
-            s_cmd.write(m_cmd.read());
-            s_req.write(true);
+    	// Przekazanie danych kontrolera dalej.
+    	s_req.write(m_req.read());
+    	s_cmd.write(m_cmd.read());
 
-            // Arbitraż powrotny - sprawdź, czy WSZYSTKIE kontrolery odpowiedziały
-            bool all_ack = true;
-            for (int i = 0; i < 5; i++) {
-                if (s_ack[i].read() == false) {
-                    all_ack = false;
-                }
-            }
-            m_ack.write(all_ack); // Wyślij ACK do Mastera dopiero, gdy wszystkie slave'y potwierdzą
-        } else {
-            // Zwolnienie magistrali
-            s_req.write(false);
-            m_ack.write(false);
-        }
+    	// all_ack dla potwierdzonego cyklu 2.
+    	bool all_ack = true;
+    	// any_ack dla przejścia z 4. do 1.
+    	bool any_ack = false;
+
+    	// check the above
+    	for (int i = 0; i < 5; i++) {
+    		if (s_ack[i].read() == false) all_ack = false;
+    	    if (s_ack[i].read() == true)  any_ack = true;
+    	}
+
+    	// jeśli master przekazał ostatnio wiadomość
+    	if (m_req.read() == true) {
+    		// jeśli wszystkie odebrały, potwierdź
+    	    m_ack.write(all_ack);
+    	} else {
+    		// jeśli wszystkie są gotowe, potwierdź
+    		m_ack.write(any_ack);
+    	}
     }
 };
 
